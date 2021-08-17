@@ -50,12 +50,14 @@ class SovranTest : Subscriber {
         }
 
         // this should add a second listener for UserState
-        store.subscribe(this, UserState::class) { state ->
+        val identifier = store.subscribe(this, UserState::class) { state ->
             print("username2 = $state.username")
         }
 
         // we should have 3 subscriptions.  2 for UserState, one for MessagesState.
         assertEquals(3, store.subscriptions.size)
+        // the subscription id of the last one should be 3
+        assertEquals(3, identifier)
     }
 
     @Test
