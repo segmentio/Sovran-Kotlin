@@ -52,7 +52,7 @@ class Store {
                 notify(listOf(subscription), it)
             }
         }
-        return 0
+        return subscription.subscriptionID
     }
 
     /**
