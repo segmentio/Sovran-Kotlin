@@ -56,7 +56,8 @@ class SovranTest : Subscriber {
 
         // we should have 3 subscriptions.  2 for UserState, one for MessagesState.
         assertEquals(3, store.subscriptions.size)
-        // the subscription id of the last one should be 3
+        // we should have id1 + 2 = id3,
+        // since the subscription ID has been increased twice since id1
         assertEquals(id1 + 2, id3)
     }
 
