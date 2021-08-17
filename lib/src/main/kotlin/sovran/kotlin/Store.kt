@@ -201,7 +201,7 @@ class Store {
     data class Container(var state: State)
 
     internal class Subscription<StateT : State>(
-            obj: Any, val handler: Handler<StateT>,
+            obj: Subscriber, val handler: Handler<StateT>,
             val key: KClass<StateT>,
             val queue: CoroutineDispatcher
     ) {
