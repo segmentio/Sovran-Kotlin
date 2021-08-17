@@ -64,7 +64,7 @@ class Store {
     fun unsubscribe(subscriptionID: SubscriptionID) {
         runBlocking(syncQueue) {
             subscriptions.removeAll {
-                it.subscriptionID != subscriptionID
+                it.subscriptionID == subscriptionID
             }
         }
     }
