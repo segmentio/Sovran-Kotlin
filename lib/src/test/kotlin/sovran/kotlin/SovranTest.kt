@@ -40,7 +40,7 @@ class SovranTest : Subscriber {
         store.provide(UserState())
 
         // register some handlers for state changes
-        store.subscribe(this, MessagesState::class) { state ->
+        val id1 = store.subscribe(this, MessagesState::class) { state ->
             print("unreadCount = $state.unreadCount")
         }
 
@@ -50,12 +50,15 @@ class SovranTest : Subscriber {
         }
 
         // this should add a second listener for UserState
-        store.subscribe(this, UserState::class) { state ->
+        val id3 = store.subscribe(this, UserState::class) { state ->
             print("username2 = $state.username")
         }
 
         // we should have 3 subscriptions.  2 for UserState, one for MessagesState.
         assertEquals(3, store.subscriptions.size)
+        // we should have id1 + 2 = id3,
+        // since the subscription ID has been increased twice since id1
+        assertEquals(id1 + 2, id3)
     }
 
     @Test
@@ -186,7 +189,13 @@ class SovranTest : Subscriber {
         val action = MessagesUnreadAction(22)
         store.dispatch(action, MessagesState::class)
 
+        val subscriptionCount = store.subscriptions.size
         store.unsubscribe(identifier)
+
+        // now the subscriptions should not have the one being unsubscribed
+        assertFalse(store.subscriptions.any{ it.subscriptionID == identifier })
+        // and the size should reduced only by 1
+        assertEquals(subscriptionCount - 1, store.subscriptions.size)
 
         // this should be ignored since we've unsubscribed.
         val nextAction = MessagesUnreadAction(11)

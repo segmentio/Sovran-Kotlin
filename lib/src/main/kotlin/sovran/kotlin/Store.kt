@@ -52,7 +52,7 @@ class Store {
                 notify(listOf(subscription), it)
             }
         }
-        return 0
+        return subscription.subscriptionID
     }
 
     /**
@@ -64,7 +64,7 @@ class Store {
     fun unsubscribe(subscriptionID: SubscriptionID) {
         runBlocking(syncQueue) {
             subscriptions.removeAll {
-                it.subscriptionID != subscriptionID
+                it.subscriptionID == subscriptionID
             }
         }
     }
@@ -201,7 +201,7 @@ class Store {
     data class Container(var state: State)
 
     internal class Subscription<StateT : State>(
-            obj: Any, val handler: Handler<StateT>,
+            obj: Subscriber, val handler: Handler<StateT>,
             val key: KClass<StateT>,
             val queue: CoroutineDispatcher
     ) {
