@@ -188,7 +188,13 @@ class SovranTest : Subscriber {
         val action = MessagesUnreadAction(22)
         store.dispatch(action, MessagesState::class)
 
+        val subscriptionCount = store.subscriptions.size
         store.unsubscribe(identifier)
+
+        // now the subscriptions should not have the one being unsubscribed
+        assertFalse(store.subscriptions.any{ it.subscriptionID == identifier })
+        // and the size should reduced only by 1
+        assertEquals(subscriptionCount - 1, store.subscriptions.size)
 
         // this should be ignored since we've unsubscribed.
         val nextAction = MessagesUnreadAction(11)
