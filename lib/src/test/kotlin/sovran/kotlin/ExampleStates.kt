@@ -34,7 +34,7 @@ data class MyResultType(var value: Int)
 
 class MessagesUnreadAsyncAction(var drop: Boolean, var value: Int) : AsyncAction<MessagesState, MyResultType> {
 
-    override fun operation(state: MessagesState, completion: (MyResultType?) -> Unit) {
+    override fun operation(state: MessagesState, completion: suspend (MyResultType?) -> Unit) {
         runBlocking {
             delay(1000L)
             val result = MyResultType(value)
@@ -61,7 +61,7 @@ class NotProvidedAction : Action<NotProvidedState> {
 }
 
 class NotProvidedAsyncAction : AsyncAction<NotProvidedState, MyResultType> {
-    override fun operation(state: NotProvidedState, completion: (MyResultType?) -> Unit) {}
+    override fun operation(state: NotProvidedState, completion: suspend (MyResultType?) -> Unit) {}
 
     override fun reduce(state: NotProvidedState, operationResult: MyResultType?): NotProvidedState {
         return state
