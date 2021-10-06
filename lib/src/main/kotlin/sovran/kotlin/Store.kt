@@ -182,10 +182,14 @@ class Store {
     /* Internal Functions */
 
     // Retrieves all subscribers for a particular type of state
-    private fun <StateT : State> subscribersForState(stateClazz: KClass<StateT>): List<Subscription<out State>> {
-        return subscriptions.filter {
-            it.key == stateClazz
+    private suspend fun <StateT : State> subscribersForState(stateClazz: KClass<StateT>): List<Subscription<out State>> {
+        val result = sovranScope.async(syncQueue) {
+            subscriptions.filter {
+                it.key == stateClazz
+            }
         }
+
+        return result.await()
     }
 
     // Returns any state instances matching T::class.
