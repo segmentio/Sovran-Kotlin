@@ -20,6 +20,7 @@ class Store {
      * the thread in a later time.
      * thus, coroutines launched by this dispatcher should not have suspend functions, or
      * it breaks serializability.
+     * this queue is specifically for subscriptions
      */
     private val syncQueue = Executors.newSingleThreadExecutor().asCoroutineDispatcher() +
             CoroutineName("state.sync.sovran.com")
@@ -32,6 +33,7 @@ class Store {
      * the thread in a later time.
      * thus, coroutines launched by this dispatcher should not have suspend functions, or
      * it breaks serializability.
+     * this queue is specifically for states
      */
     private val updateQueue = Executors.newSingleThreadExecutor().asCoroutineDispatcher() +
             CoroutineName("state.update.sovran.com")
@@ -104,7 +106,7 @@ class Store {
             return
         }
         val container = Container(state)
-        sovranScope.launch(syncQueue) {
+        sovranScope.launch(updateQueue) {
             states.add(container)
         }.join()
     }
