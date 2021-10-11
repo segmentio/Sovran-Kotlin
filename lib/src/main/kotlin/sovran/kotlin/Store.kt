@@ -12,6 +12,7 @@ class Store {
     internal val states: MutableList<Container>
     internal val subscriptions: MutableList<Subscription<out State>>
     private val sovranScope = CoroutineScope(SupervisorJob())
+        get() = field   // force to create a private getter for test injection
 
     /**
      * use single thread to force synchronization of posted tasks
@@ -24,6 +25,7 @@ class Store {
      */
     private val syncQueue = Executors.newSingleThreadExecutor().asCoroutineDispatcher() +
             CoroutineName("state.sync.sovran.com")
+        get() = field   // force to create a private getter for test injection
 
     /**
      * same as syncQueue.
@@ -37,6 +39,7 @@ class Store {
      */
     private val updateQueue = Executors.newSingleThreadExecutor().asCoroutineDispatcher() +
             CoroutineName("state.update.sovran.com")
+        get() = field   // force to create a private getter for test injection
 
     init {
         states = arrayListOf()
@@ -197,7 +200,7 @@ class Store {
     // Returns any state instances matching T::class.
     private suspend fun <T : State> statesMatching(clazz: KClass<T>): List<Container> {
         val result = sovranScope.async(updateQueue) {
-            states.filter {    
+            states.filter {
                 it.state::class == clazz
             }
         }
