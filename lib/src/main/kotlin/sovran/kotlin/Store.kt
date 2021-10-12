@@ -2,6 +2,7 @@ package sovran.kotlin
 
 import kotlinx.coroutines.*
 import java.lang.ref.WeakReference
+import java.util.concurrent.Executors
 import kotlin.reflect.KClass
 
 typealias SubscriptionID = Int
@@ -10,8 +11,35 @@ class Store {
 
     internal val states: MutableList<Container>
     internal val subscriptions: MutableList<Subscription<out State>>
-    internal val syncQueue = Dispatchers.Default + CoroutineName("state.sync.sovran.com")
-    internal val updateQueue = Dispatchers.Default + CoroutineName("state.update.sovran.com")
+    private val sovranScope = CoroutineScope(SupervisorJob())
+        get() = field   // force to create a private getter for test injection
+
+    /**
+     * use single thread to force synchronization of posted tasks
+     * however, this does not guarantee serializability, since coroutine only suspends.
+     * if func A suspends, this single thread continue with func B, which could be posted to
+     * the thread in a later time.
+     * thus, coroutines launched by this dispatcher should not have suspend functions, or
+     * it breaks serializability.
+     * this queue is specifically for subscriptions
+     */
+    private val syncQueue = Executors.newSingleThreadExecutor().asCoroutineDispatcher() +
+            CoroutineName("state.sync.sovran.com")
+        get() = field   // force to create a private getter for test injection
+
+    /**
+     * same as syncQueue.
+     * use single thread to force synchronization of posted tasks
+     * however, this does not guarantee serializability, since coroutine only suspends.
+     * if func A suspends, this single thread continue with func B, which could be posted to
+     * the thread in a later time.
+     * thus, coroutines launched by this dispatcher should not have suspend functions, or
+     * it breaks serializability.
+     * this queue is specifically for states
+     */
+    private val updateQueue = Executors.newSingleThreadExecutor().asCoroutineDispatcher() +
+            CoroutineName("state.update.sovran.com")
+        get() = field   // force to create a private getter for test injection
 
     init {
         states = arrayListOf()
@@ -36,7 +64,7 @@ class Store {
      *  }
      * ```
      */
-    fun <StateT : State> subscribe(
+    suspend fun <StateT : State> subscribe(
             subscriber: Subscriber,
             stateClazz: KClass<StateT>,
             initialState: Boolean = false,
@@ -44,9 +72,9 @@ class Store {
             handler: Handler<StateT>
     ): SubscriptionID {
         val subscription = Subscription(obj = subscriber, handler = handler, key = stateClazz, queue = queue)
-        runBlocking(syncQueue) {
+        sovranScope.launch(syncQueue) {
             subscriptions.add(subscription)
-        }
+        }.join()
         if (initialState) {
             currentState(stateClazz)?.let {
                 notify(listOf(subscription), it)
@@ -61,12 +89,12 @@ class Store {
      *
      * @param subscriptionID The subscriberID given as a result from a previous subscribe() call.
      */
-    fun unsubscribe(subscriptionID: SubscriptionID) {
-        runBlocking(syncQueue) {
+    suspend fun unsubscribe(subscriptionID: SubscriptionID) {
+        sovranScope.launch(syncQueue) {
             subscriptions.removeAll {
                 it.subscriptionID == subscriptionID
             }
-        }
+        }.join()
     }
 
     /**
@@ -75,15 +103,15 @@ class Store {
      *
      * @param state A class instance conforming to `State`.
      */
-    fun <StateT : State> provide(state: StateT) {
+    suspend fun <StateT : State> provide(state: StateT) {
         val exists = statesMatching(state::class)
         if (exists.isNotEmpty()) {
             return
         }
         val container = Container(state)
-        runBlocking(syncQueue) {
+        sovranScope.launch(updateQueue) {
             states.add(container)
-        }
+        }.join()
     }
 
     /**
@@ -93,18 +121,18 @@ class Store {
      * @param action        The action to be dispatched.  Must conform to `Action`.
      * @param stateClazz    The type of message this action acts upon. Must conform to `State`
      */
-    fun <ActionT : Action<StateT>, StateT : State> dispatch(action: ActionT, stateClazz: KClass<StateT>) {
+    suspend fun <ActionT : Action<StateT>, StateT : State> dispatch(action: ActionT, stateClazz: KClass<StateT>) {
         // check if we have the instance type requested.
         val target = statesMatching(stateClazz).firstOrNull()
         // type the current state to match.
         var state = target?.state as? StateT ?: return
 
-        runBlocking(updateQueue) {
+        sovranScope.launch(updateQueue) {
             // perform data reduction.
             state = action.reduce(state)
             // state is final now, apply it back to storage.
             target.state = state
-        }
+        }.join()
 
         // get any handlers that work against T.StateType
         val subs = subscribersForState(stateClazz)
@@ -119,7 +147,7 @@ class Store {
      * @param action        The action to be dispatched.  Must conform to `AsyncAction`.
      * @param stateClazz    The type of message this action acts upon. Must conform to `State`
      */
-    fun <ActionT : AsyncAction<StateT, ResultT>, StateT : State, ResultT> dispatch(action: ActionT, stateClazz: KClass<StateT>) {
+    suspend fun <ActionT : AsyncAction<StateT, ResultT>, StateT : State, ResultT> dispatch(action: ActionT, stateClazz: KClass<StateT>) {
         // check if we have the instance type requested.
         val target = statesMatching(stateClazz).firstOrNull()
         // type the current state to match.
@@ -127,12 +155,12 @@ class Store {
 
         // perform async operation.
         action.operation(state) { result: ResultT? ->
-            runBlocking(updateQueue) {
+            sovranScope.launch(updateQueue) {
                 // perform data reduction.
                 state = action.reduce(state, result)
                 // state is final now, apply it back to storage.
                 target.state = state
-            }
+            }.join()
 
             // get any handlers that work against T.StateType
             val subs = subscribersForState(stateClazz)
@@ -148,7 +176,7 @@ class Store {
      *      val state = store.currentState(MessagesState::class)
      * ```
      */
-    fun <StateT : State> currentState(clazz: KClass<StateT>): StateT? {
+    suspend fun <StateT : State> currentState(clazz: KClass<StateT>): StateT? {
         val matchingStates = statesMatching(clazz)
         return if (matchingStates.isNotEmpty())
             matchingStates[0].state as? StateT
@@ -159,30 +187,36 @@ class Store {
     /* Internal Functions */
 
     // Retrieves all subscribers for a particular type of state
-    private fun <StateT : State> subscribersForState(stateClazz: KClass<StateT>): List<Subscription<out State>> {
-        return subscriptions.filter {
-            it.key == stateClazz
+    private suspend fun <StateT : State> subscribersForState(stateClazz: KClass<StateT>): List<Subscription<out State>> {
+        val result = sovranScope.async(syncQueue) {
+            subscriptions.filter {
+                it.key == stateClazz
+            }
         }
+
+        return result.await()
     }
 
     // Returns any state instances matching T::class.
-    private fun <T : State> statesMatching(clazz: KClass<T>): List<Container> = runBlocking(updateQueue) {
-        return@runBlocking withContext(this.coroutineContext) {
+    private suspend fun <T : State> statesMatching(clazz: KClass<T>): List<Container> {
+        val result = sovranScope.async(updateQueue) {
             states.filter {
                 it.state::class == clazz
             }
         }
+
+        return result.await()
     }
 
     // Notify any subscribers with the new state.
-    private fun <StateT : State> notify(subscribers: List<Subscription<out StateT>>, state: StateT) {
+    private suspend fun <StateT : State> notify(subscribers: List<Subscription<out StateT>>, state: StateT) {
         for (sub in subscribers) {
             val handler = sub.handler as? Handler<StateT> ?: continue
             // call said handlers to inform them of the new state.
             if (sub.owner.get() != null) {
                 // call the handlers asynchronously
-                runBlocking(sub.queue) {
-                    launch { handler(state) }
+                sovranScope.launch (sub.queue) {
+                    handler(state)
                 }
             }
         }
@@ -190,12 +224,12 @@ class Store {
     }
 
     // Removes any expired subscribers.
-    private fun clean() {
-        runBlocking(syncQueue) {
+    private suspend fun clean() {
+        sovranScope.launch(syncQueue) {
             subscriptions.removeAll {
                 it.owner.get() == null
             }
-        }
+        }.join()
     }
 
     data class Container(var state: State)

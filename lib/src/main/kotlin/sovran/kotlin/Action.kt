@@ -46,7 +46,7 @@ interface AsyncAction<StateT: State, ResultT> {
     * }
     * ```
     */
-    fun operation(state: StateT, completion: (ResultT?) -> Unit)
+    fun operation(state: StateT, completion: suspend (ResultT?) -> Unit)
 
     /**
      * The reducer for this action. Reducer implementations should be constructed such
