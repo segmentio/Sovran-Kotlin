@@ -28,8 +28,7 @@ jobs:
     - name: Run Tests
       run: ./gradlew check
     - name: Snyk
-      uses: snyk/actions/gradle@master
+      run: npx snyk test --severity-threshold=high
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        args: --severity-threshold=high --fail-on=upgradable
+
