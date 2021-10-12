@@ -27,8 +27,14 @@ jobs:
       run: ./gradlew dependencies
     - name: Run Tests
       run: ./gradlew check
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
     - name: Snyk
-      run: npx snyk test --severity-threshold=high
+      uses: snyk/actions/gradle-jdk11@master
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high --fail-on=upgradable
 
