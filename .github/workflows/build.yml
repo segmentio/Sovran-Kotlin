@@ -27,9 +27,9 @@ jobs:
       run: ./gradlew dependencies
     - name: Run Tests
       run: ./gradlew check
-    - name: Snyk
-      uses: snyk/actions/gradle-jdk11@master
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        args: --severity-threshold=high
+#    - name: Snyk
+#      uses: snyk/actions/gradle-jdk11@master
+#      env:
+#        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+#      with:
+#        args: --severity-threshold=high
