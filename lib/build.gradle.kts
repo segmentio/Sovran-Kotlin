@@ -10,7 +10,10 @@ version = "0.1.0"
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
-    id("org.jetbrains.kotlin.jvm") version "1.3.72"
+    id("org.jetbrains.kotlin.jvm") version "1.5.30"
+
+    // Apply snyk plugin to test vulnerability
+    id("io.snyk.gradle.plugin.snykplugin") version "0.4"
 
     // Apply the java-library plugin for API and implementation separation.
     `java-library`
@@ -32,7 +35,7 @@ dependencies {
     // Use the Kotlin JDK 8 standard library.
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2")
 
     // Use the Kotlin test library.
     testImplementation("org.jetbrains.kotlin:kotlin-test")
@@ -40,4 +43,11 @@ dependencies {
     // Use the Kotlin JUnit integration.
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
 
+}
+
+configure<io.snyk.gradle.plugin.SnykExtension> {
+    // setSeverity("high")
+    setAutoDownload(true)
+    setAutoUpdate(true)
+    setArguments("--all-sub-projects --fail-on=upgradable")
 }
