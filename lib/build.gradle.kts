@@ -46,7 +46,7 @@ dependencies {
 }
 
 configure<io.snyk.gradle.plugin.SnykExtension> {
-    // setSeverity("high")
+    setSeverity("high")
     setAutoDownload(true)
     setAutoUpdate(true)
     setArguments("--all-sub-projects --fail-on=upgradable")
