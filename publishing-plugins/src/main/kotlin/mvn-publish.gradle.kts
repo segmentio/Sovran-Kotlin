@@ -16,7 +16,6 @@ ext["signing.secretKeyRingFile"] = null
 ext["ossrhUsername"] = null
 ext["ossrhPassword"] = null
 
-// Grabbing secrets from local.properties file or from environment variables, which could be used on CI
 fun loadSecrets(secretPropsFile: File) {
     if (secretPropsFile.exists()) {
         secretPropsFile.reader().use {
@@ -29,6 +28,7 @@ fun loadSecrets(secretPropsFile: File) {
     }
 }
 
+// Grabbing secrets from gradle.properties file or from environment variables, which could be used on CI
 loadSecrets(project.rootProject.file("gradle.properties"))
 loadSecrets(File("${project.gradle.gradleUserHomeDir}/gradle.properties"))
 if (getExtraString("signing.keyId") == null) {
@@ -104,11 +104,21 @@ afterEvaluate {
         }
     }
 
-
-// Signing artifacts. Signing.* extra properties values will be used
-
     signing {
         sign(publishing.publications)
     }
+}
+
+
+tasks.getByName("publish") {
+    dependsOn("build")
+}
+
+tasks.getByName("publishToMavenLocal") {
+    dependsOn("build")
+}
+
+tasks.getByName("publishToSonatype") {
+    dependsOn("publish")
 }
 
