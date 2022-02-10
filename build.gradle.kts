@@ -4,7 +4,7 @@ val VERSION_NAME: String by project
 group = GROUP
 version = getVersionName()
 
-/*plugins {
+plugins {
     // Apply snyk plugin to test vulnerability
     id("io.snyk.gradle.plugin.snykplugin") version "0.4"
 
@@ -29,7 +29,7 @@ nexusPublishing {
     repositories {
         sonatype()
     }
-}*/
+}
 
 fun getVersionName() =
     if (hasProperty("release"))

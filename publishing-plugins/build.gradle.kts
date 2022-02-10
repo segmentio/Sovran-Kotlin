@@ -1,7 +1,6 @@
-/*plugins {
-    //kotlin("jvm") version "1.5.10"
-    kotlin("multiplatform") version "1.5.30"
-//    `kotlin-dsl`
+plugins {
+    kotlin("multiplatform") version "1.6.0"
+    `maven-publish`
 }
 
 repositories {
@@ -9,7 +8,16 @@ repositories {
     gradlePluginPortal()
 }
 
-dependencies {
+kotlin {
+    jvm {
+        compilations.all {
+            kotlinOptions {
+                jvmTarget = "1.8"
+            }
+        }
+    }
 
-    implementation(kotlin("stdlib"))
-}*/
+    sourceSets {
+        val commonMain by getting
+    }
+}
