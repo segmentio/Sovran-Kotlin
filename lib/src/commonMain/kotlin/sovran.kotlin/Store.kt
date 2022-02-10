@@ -1,8 +1,6 @@
 package sovran.kotlin
 
 import kotlinx.coroutines.*
-import java.lang.ref.WeakReference
-import java.util.concurrent.Executors
 import kotlin.reflect.KClass
 
 typealias SubscriptionID = Int
@@ -23,8 +21,7 @@ class Store {
      * it breaks serializability.
      * this queue is specifically for subscriptions
      */
-    private val syncQueue = Executors.newSingleThreadExecutor().asCoroutineDispatcher() +
-            CoroutineName("state.sync.sovran.com")
+    private val syncQueue = CoroutineName("state.sync.sovran.com")
         get() = field   // force to create a private getter for test injection
 
     /**
@@ -37,8 +34,7 @@ class Store {
      * it breaks serializability.
      * this queue is specifically for states
      */
-    private val updateQueue = Executors.newSingleThreadExecutor().asCoroutineDispatcher() +
-            CoroutineName("state.update.sovran.com")
+    private val updateQueue = CoroutineName("state.update.sovran.com")
         get() = field   // force to create a private getter for test injection
 
     init {
@@ -65,11 +61,11 @@ class Store {
      * ```
      */
     suspend fun <StateT : State> subscribe(
-            subscriber: Subscriber,
-            stateClazz: KClass<StateT>,
-            initialState: Boolean = false,
-            queue: CoroutineDispatcher = Dispatchers.Default,
-            handler: Handler<StateT>
+        subscriber: Subscriber,
+        stateClazz: KClass<StateT>,
+        initialState: Boolean = false,
+        queue: CoroutineDispatcher = Dispatchers.Default,
+        handler: Handler<StateT>
     ): SubscriptionID {
         val subscription = Subscription(obj = subscriber, handler = handler, key = stateClazz, queue = queue)
         sovranScope.launch(syncQueue) {
@@ -212,12 +208,9 @@ class Store {
     private suspend fun <StateT : State> notify(subscribers: List<Subscription<out StateT>>, state: StateT) {
         for (sub in subscribers) {
             val handler = sub.handler as? Handler<StateT> ?: continue
-            // call said handlers to inform them of the new state.
-            if (sub.owner.get() != null) {
-                // call the handlers asynchronously
-                sovranScope.launch (sub.queue) {
-                    handler(state)
-                }
+            // call the handlers asynchronously
+            sovranScope.launch (sub.queue) {
+                handler(state)
             }
         }
         clean()
@@ -226,21 +219,18 @@ class Store {
     // Removes any expired subscribers.
     private suspend fun clean() {
         sovranScope.launch(syncQueue) {
-            subscriptions.removeAll {
-                it.owner.get() == null
-            }
+            subscriptions.clear()
         }.join()
     }
 
     data class Container(var state: State)
 
     internal class Subscription<StateT : State>(
-            obj: Subscriber, val handler: Handler<StateT>,
-            val key: KClass<StateT>,
-            val queue: CoroutineDispatcher
+        val obj: Subscriber, val handler: Handler<StateT>,
+        val key: KClass<StateT>,
+        val queue: CoroutineDispatcher
     ) {
         val subscriptionID: SubscriptionID = createNextSubscriptionID()
-        val owner: WeakReference<Any> = WeakReference(obj)
 
         companion object {
             private var nextSubscriptionID = 1

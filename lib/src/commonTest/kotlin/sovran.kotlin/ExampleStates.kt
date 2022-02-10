@@ -2,9 +2,8 @@ package sovran.kotlin
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import java.net.URL
 
-data class Message(var from: String, var to: String, var content: String, var photos: List<URL>)
+data class Message(var from: String, var to: String, var content: String, var photos: List<String>)
 
 data class MessagesState(
         var unreadCount: Int = 0,
