@@ -4,15 +4,10 @@ val VERSION_NAME: String by project
 group = GROUP
 version = getVersionName()
 
-plugins {
-    // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
-    id("org.jetbrains.kotlin.jvm") version "1.5.30"
-
+/*plugins {
     // Apply snyk plugin to test vulnerability
     id("io.snyk.gradle.plugin.snykplugin") version "0.4"
 
-    // Apply the java-library plugin for API and implementation separation.
-    `java-library`
     id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
 
 }
@@ -34,7 +29,7 @@ nexusPublishing {
     repositories {
         sonatype()
     }
-}
+}*/
 
 fun getVersionName() =
     if (hasProperty("release"))

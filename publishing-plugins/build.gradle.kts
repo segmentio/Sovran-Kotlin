@@ -1,6 +1,7 @@
-plugins {
-    kotlin("jvm") version "1.5.10"
-    `kotlin-dsl`
+/*plugins {
+    //kotlin("jvm") version "1.5.10"
+    kotlin("multiplatform") version "1.5.30"
+//    `kotlin-dsl`
 }
 
 repositories {
@@ -9,5 +10,6 @@ repositories {
 }
 
 dependencies {
+
     implementation(kotlin("stdlib"))
-}
+}*/
