@@ -14,6 +14,10 @@ class Store {
     private val sovranScope = CoroutineScope(SupervisorJob())
         get() = field   // force to create a private getter for test injection
 
+
+    private val syncQueueDispatcher: CloseableCoroutineDispatcher =
+        Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+
     /**
      * use single thread to force synchronization of posted tasks
      * however, this does not guarantee serializability, since coroutine only suspends.
@@ -23,9 +27,13 @@ class Store {
      * it breaks serializability.
      * this queue is specifically for subscriptions
      */
-    private val syncQueue = Executors.newSingleThreadExecutor().asCoroutineDispatcher() +
+    private val syncQueue = syncQueueDispatcher +
             CoroutineName("state.sync.sovran.com")
         get() = field   // force to create a private getter for test injection
+
+
+    private val updateQueueDispatcher: CloseableCoroutineDispatcher =
+        Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
     /**
      * same as syncQueue.
@@ -37,7 +45,7 @@ class Store {
      * it breaks serializability.
      * this queue is specifically for states
      */
-    private val updateQueue = Executors.newSingleThreadExecutor().asCoroutineDispatcher() +
+    private val updateQueue = updateQueueDispatcher +
             CoroutineName("state.update.sovran.com")
         get() = field   // force to create a private getter for test injection
 
@@ -182,6 +190,16 @@ class Store {
             matchingStates[0].state as? StateT
         else
             null
+    }
+
+    /**
+     * Shutdowns down CoroutineDispatchers. This is typically used to cleanup resources in
+     * containerized environments. This is a non-reversible call; the Store will non-longer
+     * process events after this call.
+     */
+    fun shutdown() {
+        syncQueueDispatcher.close()
+        updateQueueDispatcher.close()
     }
 
     /* Internal Functions */
