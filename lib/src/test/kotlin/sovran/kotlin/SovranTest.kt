@@ -257,9 +257,10 @@ class SovranTest : Subscriber {
         val handler: Handler<MessagesState> = { _ ->
             print("booya")
         }
-        val s1 = Store.Subscription(this, handler, MessagesState::class, Dispatchers.Default)
-        val s2 = Store.Subscription(this, handler, MessagesState::class, Dispatchers.Default)
-        val s3 = Store.Subscription(this, handler, MessagesState::class, Dispatchers.Default)
+        val queue = DispatchQueue()
+        val s1 = Store.Subscription(this, handler, MessagesState::class, queue)
+        val s2 = Store.Subscription(this, handler, MessagesState::class, queue)
+        val s3 = Store.Subscription(this, handler, MessagesState::class, queue)
 
         assertTrue(s2.subscriptionID > s1.subscriptionID)
         assertTrue(s3.subscriptionID > s2.subscriptionID)
