@@ -1,5 +1,6 @@
 package sovran.kotlin
 
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.SynchronousQueue
@@ -22,22 +23,22 @@ class DispatchQueue {
         executor.shutdown()
     }
 
-    fun consume() {
+    private fun consume() {
         while (running.get()) {
             val task = queue.take()
             task.closure()
-            task.semaphore.release()
+            task.latch.countDown()
         }
     }
 
     fun sync(closure: () -> Unit) {
         val task = Task(closure)
         queue.put(task)
-        task.semaphore.acquire()
+        task.latch.await()
     }
 
     data class Task(
         val closure: () -> Unit,
-        val semaphore: Semaphore = Semaphore(0)
+        val latch: CountDownLatch = CountDownLatch(1)
     )
 }

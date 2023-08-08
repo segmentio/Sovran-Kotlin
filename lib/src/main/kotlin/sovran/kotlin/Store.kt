@@ -25,14 +25,18 @@ interface AsyncStore {
     suspend fun <ActionT : AsyncAction<StateT, ResultT>, StateT : State, ResultT> dispatch(action: ActionT, stateClazz: KClass<StateT>)
 
     suspend fun <StateT : State> currentState(clazz: KClass<StateT>): StateT?
+
+    fun shutdown()
 }
 
-class Store : SynchronousStore(), AsyncStore {
+class Store : AsyncStore {
 
     private val sovranDispatcher: CloseableCoroutineDispatcher =
         Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
     private val sovranContext = CoroutineScope(SupervisorJob()).coroutineContext + sovranDispatcher
+
+    internal val internalStore = SynchronousStore()
 
     override suspend fun <StateT : State> subscribe(
         subscriber: Subscriber,
@@ -41,37 +45,37 @@ class Store : SynchronousStore(), AsyncStore {
         queue: DispatchQueue?,
         handler: Handler<StateT>
     ): SubscriptionID = withContext(sovranContext) {
-        subscribeSync(subscriber, stateClazz, initialState, queue, handler)
+        internalStore.subscribe(subscriber, stateClazz, initialState, queue, handler)
     }
 
     override suspend fun unsubscribe(subscriptionID: SubscriptionID) = withContext(sovranContext) {
-        unsubscribeSync(subscriptionID)
+        internalStore.unsubscribe(subscriptionID)
     }
 
     override suspend fun <StateT : State> provide(state: StateT) = withContext(sovranContext) {
-        provideSync(state)
+        internalStore.provide(state)
     }
 
     override suspend fun <ActionT : Action<StateT>, StateT : State> dispatch(
         action: ActionT,
         stateClazz: KClass<StateT>
     ) = withContext(sovranContext) {
-        dispatchSync(action, stateClazz)
+        internalStore.dispatch(action, stateClazz)
     }
 
     override suspend fun <ActionT : AsyncAction<StateT, ResultT>, StateT : State, ResultT> dispatch(
         action: ActionT,
         stateClazz: KClass<StateT>
     ) = withContext(sovranContext) {
-        dispatchSync(action, stateClazz)
+        internalStore.dispatch(action, stateClazz)
     }
 
     override suspend fun <StateT : State> currentState(clazz: KClass<StateT>): StateT? = withContext(sovranContext) {
-        currentStateSync(clazz)
+        internalStore.currentState(clazz)
     }
 
     override fun shutdown() {
-        super.shutdown()
+        internalStore.shutdown()
         sovranDispatcher.close()
     }
 

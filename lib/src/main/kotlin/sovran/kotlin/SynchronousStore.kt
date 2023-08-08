@@ -2,7 +2,29 @@ package sovran.kotlin
 
 import kotlin.reflect.KClass
 
-open class SynchronousStore {
+interface BlockingStore {
+    fun <StateT : State> subscribe(
+        subscriber: Subscriber,
+        stateClazz: KClass<StateT>,
+        initialState: Boolean = false,
+        queue: DispatchQueue? = null,
+        handler: Handler<StateT>
+    ): SubscriptionID
+
+    fun unsubscribe(subscriptionID: SubscriptionID)
+
+    fun <StateT : State> provide(state: StateT)
+
+    fun <ActionT : Action<StateT>, StateT : State> dispatch(action: ActionT, stateClazz: KClass<StateT>)
+
+    fun <ActionT : AsyncAction<StateT, ResultT>, StateT : State, ResultT> dispatch(action: ActionT, stateClazz: KClass<StateT>)
+
+    fun <StateT : State> currentState(clazz: KClass<StateT>): StateT?
+
+    fun shutdown()
+}
+
+class SynchronousStore : BlockingStore {
 
     internal val states: MutableList<Container>
 
@@ -41,7 +63,7 @@ open class SynchronousStore {
      *  }
      * ```
      */
-    fun <StateT : State> subscribeSync(
+    override fun <StateT : State> subscribe(
         subscriber: Subscriber,
         stateClazz: KClass<StateT>,
         initialState: Boolean,
@@ -53,7 +75,7 @@ open class SynchronousStore {
             subscriptions.add(subscription)
         }
         if (initialState) {
-            currentStateSync(stateClazz)?.let {
+            currentState(stateClazz)?.let {
                 notify(listOf(subscription), it)
             }
         }
@@ -66,7 +88,7 @@ open class SynchronousStore {
      *
      * @param subscriptionID The subscriberID given as a result from a previous subscribe() call.
      */
-    fun unsubscribeSync(subscriptionID: SubscriptionID) {
+    override fun unsubscribe(subscriptionID: SubscriptionID) {
         syncQueue.sync {
             subscriptions.removeAll {
                 it.subscriptionID == subscriptionID
@@ -80,7 +102,7 @@ open class SynchronousStore {
      *
      * @param state A class instance conforming to `State`.
      */
-    fun <StateT : State> provideSync(state: StateT) {
+    override fun <StateT : State> provide(state: StateT) {
         val exists = statesMatching(state::class)
         if (exists.isNotEmpty()) {
             return
@@ -98,7 +120,7 @@ open class SynchronousStore {
      * @param action        The action to be dispatched.  Must conform to `Action`.
      * @param stateClazz    The type of message this action acts upon. Must conform to `State`
      */
-    fun <ActionT : Action<StateT>, StateT : State> dispatchSync(action: ActionT, stateClazz: KClass<StateT>) {
+    override fun <ActionT : Action<StateT>, StateT : State> dispatch(action: ActionT, stateClazz: KClass<StateT>) {
         // check if we have the instance type requested.
         val target = statesMatching(stateClazz).firstOrNull()
         // type the current state to match.
@@ -124,7 +146,7 @@ open class SynchronousStore {
      * @param action        The action to be dispatched.  Must conform to `AsyncAction`.
      * @param stateClazz    The type of message this action acts upon. Must conform to `State`
      */
-    fun <ActionT : AsyncAction<StateT, ResultT>, StateT : State, ResultT> dispatchSync(action: ActionT, stateClazz: KClass<StateT>) {
+    override fun <ActionT : AsyncAction<StateT, ResultT>, StateT : State, ResultT> dispatch(action: ActionT, stateClazz: KClass<StateT>) {
         // check if we have the instance type requested.
         val target = statesMatching(stateClazz).firstOrNull()
         // type the current state to match.
@@ -153,7 +175,7 @@ open class SynchronousStore {
      *      val state = store.currentState(MessagesState::class)
      * ```
      */
-    fun <StateT : State> currentStateSync(clazz: KClass<StateT>): StateT? {
+    override fun <StateT : State> currentState(clazz: KClass<StateT>): StateT? {
         val matchingStates = statesMatching(clazz)
         return if (matchingStates.isNotEmpty())
             matchingStates[0].state as? StateT
@@ -166,7 +188,7 @@ open class SynchronousStore {
      * containerized environments. This is a non-reversible call; the Store will non-longer
      * process events after this call.
      */
-    open fun shutdown() {
+    override fun shutdown() {
         syncQueue.stop()
         updateQueue.stop()
         notifyQueue.stop()
