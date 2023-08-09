@@ -11,8 +11,8 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.*
 
-class SovranTest : Subscriber {
-    private val store = Store()
+class SynchronousStoreTest : Subscriber {
+    private val store = SynchronousStore()
 
     @Before
     fun setup() {
@@ -25,7 +25,7 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testProvide() = runBlocking {
+    fun testProvide() {
         store.provide(MessagesState())
         assertEquals(1, store.states.size)
 
@@ -34,23 +34,23 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testDoubleSubscribe() = runBlocking {
+    fun testDoubleSubscribe() {
         // register some state
         store.provide(MessagesState())
         store.provide(UserState())
 
         // register some handlers for state changes
-        val id1 = store.subscribe(this@SovranTest, MessagesState::class) { state ->
+        val id1 = store.subscribe(this@SynchronousStoreTest, MessagesState::class) { state ->
             print("unreadCount = $state.unreadCount")
         }
 
         // subscribe self to UserState twice.
-        store.subscribe(this@SovranTest, UserState::class) { state ->
+        store.subscribe(this@SynchronousStoreTest, UserState::class) { state ->
             print("username = $state.username")
         }
 
         // this should add a second listener for UserState
-        val id3 = store.subscribe(this@SovranTest, UserState::class) { state ->
+        val id3 = store.subscribe(this@SynchronousStoreTest, UserState::class) { state ->
             print("username2 = $state.username")
         }
 
@@ -62,7 +62,7 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testDoubleProvide() = runBlocking {
+    fun testDoubleProvide() {
         // register some state
         store.provide(MessagesState())
         store.provide(UserState())
@@ -75,14 +75,14 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testDispatch() = runBlocking {
+    fun testDispatch() {
         // register some state
         store.provide(MessagesState())
 
         val latch = CountDownLatch(1)
 
         // register some handlers for state changes
-        store.subscribe(subscriber = this@SovranTest, stateClazz = MessagesState::class) { state ->
+        store.subscribe(subscriber = this@SynchronousStoreTest, stateClazz = MessagesState::class) { state ->
             latch.countDown()
             assertEquals(22, state.unreadCount)
         }
@@ -94,14 +94,14 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testAsyncDispatch() = runBlocking {
+    fun testAsyncDispatch() {
         // register some state
         store.provide(MessagesState())
 
         val latch = CountDownLatch(1)
 
         // register some handlers for state changes
-        store.subscribe(subscriber = this@SovranTest, initialState = false, stateClazz = MessagesState::class) { state ->
+        store.subscribe(subscriber = this@SynchronousStoreTest, initialState = false, stateClazz = MessagesState::class) { state ->
             latch.countDown()
             assertEquals(666, state.unreadCount)
         }
@@ -113,14 +113,14 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testDroppedAsyncDispatch() = runBlocking {
+    fun testDroppedAsyncDispatch() {
         // register some state
         store.provide(MessagesState())
 
         val latch = CountDownLatch(1)
 
         // register some handlers for state changes
-        store.subscribe(subscriber = this@SovranTest, initialState = true, stateClazz = MessagesState::class) { state ->
+        store.subscribe(subscriber = this@SynchronousStoreTest, initialState = true, stateClazz = MessagesState::class) { state ->
             latch.countDown()
             assertNotEquals(666, state.unreadCount)
         }
@@ -132,14 +132,14 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testUnprovidedStateAsyncDispatch() = runBlocking {
+    fun testUnprovidedStateAsyncDispatch() {
         // register some state
         store.provide(MessagesState())
 
         val latch = CountDownLatch(1)
 
         // register some handlers for state changes
-        store.subscribe(this@SovranTest, NotProvidedState::class, true) { _ ->
+        store.subscribe(this@SynchronousStoreTest, NotProvidedState::class, true) { _ ->
             // we should never get here because NotProvidedState isn't what's in the store.
             latch.countDown()
         }
@@ -152,14 +152,14 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testUnprovidedStateDispatch() = runBlocking {
+    fun testUnprovidedStateDispatch() {
         // register some state
         store.provide(MessagesState())
 
         val latch = CountDownLatch(1)
 
         // register some handlers for state changes
-        store.subscribe(this@SovranTest, NotProvidedState::class, true) {
+        store.subscribe(this@SynchronousStoreTest, NotProvidedState::class, true) {
             // we should never get here because NotProvidedState isn't what's in the store.
             latch.countDown()
         }
@@ -172,14 +172,14 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testUnsubscribeForAction() = runBlocking {
+    fun testUnsubscribeForAction() {
         // register some state
         store.provide(MessagesState())
 
         val latch = CountDownLatch(2)
 
         // register some handlers for state changes
-        val identifier = store.subscribe(this@SovranTest, MessagesState::class) {
+        val identifier = store.subscribe(this@SynchronousStoreTest, MessagesState::class) {
             // now we got hit by the action, verify the expected value.
             assertEquals(22, it.unreadCount)
             // if this gets hit twice, we'll get an error about multiple calls to the trigger.
@@ -206,14 +206,14 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testUnsubscribeForAsyncAction() = runBlocking {
+    fun testUnsubscribeForAsyncAction() {
         // register some state
         store.provide(MessagesState())
 
         val latch = CountDownLatch(2)
 
         // register some handlers for state changes
-        val identifier = store.subscribe(this@SovranTest, MessagesState::class) {
+        val identifier = store.subscribe(this@SynchronousStoreTest, MessagesState::class) {
             // now we got hit by the action, verify the expected value.
             assertEquals(666, it.unreadCount)
             latch.countDown()
@@ -236,7 +236,7 @@ class SovranTest : Subscriber {
     }
 
     @Test
-    fun testAlternateSubscriptionSyntax() = runBlocking {
+    fun testAlternateSubscriptionSyntax() {
         // this is more of a syntax test.  we don't really care if it's
         // a success, just that it builds.
         // register some state
@@ -244,7 +244,7 @@ class SovranTest : Subscriber {
         store.provide(MessagesState())
 
         // register some handlers for state changes
-        store.subscribe(this@SovranTest, MessagesState::class) {
+        store.subscribe(this@SynchronousStoreTest, MessagesState::class) {
             print("hello")
         }
 
@@ -257,16 +257,17 @@ class SovranTest : Subscriber {
         val handler: Handler<MessagesState> = { _ ->
             print("booya")
         }
-        val s1 = Store.Subscription(this, handler, MessagesState::class, Dispatchers.Default)
-        val s2 = Store.Subscription(this, handler, MessagesState::class, Dispatchers.Default)
-        val s3 = Store.Subscription(this, handler, MessagesState::class, Dispatchers.Default)
+        val queue = DispatchQueue()
+        val s1 = Store.Subscription(this, handler, MessagesState::class, queue)
+        val s2 = Store.Subscription(this, handler, MessagesState::class, queue)
+        val s3 = Store.Subscription(this, handler, MessagesState::class, queue)
 
         assertTrue(s2.subscriptionID > s1.subscriptionID)
         assertTrue(s3.subscriptionID > s2.subscriptionID)
     }
 
     @Test
-    fun testGetCurrentState() = runBlocking {
+    fun testGetCurrentState() {
         val state = MessagesState(unreadCount = 1, outgoingCount = 2, messages = emptyList(), outgoing = emptyList())
         store.provide(state)
 
