@@ -1,48 +1,23 @@
 package sovran.kotlin
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlin.reflect.KClass
 
-interface BlockingStore {
-    fun <StateT : State> subscribe(
-        subscriber: Subscriber,
-        stateClazz: KClass<StateT>,
-        initialState: Boolean = false,
-        queue: DispatchQueue? = null,
-        handler: Handler<StateT>
-    ): SubscriptionID
-
-    fun unsubscribe(subscriptionID: SubscriptionID)
-
-    fun <StateT : State> provide(state: StateT)
-
-    fun <ActionT : Action<StateT>, StateT : State> dispatch(action: ActionT, stateClazz: KClass<StateT>)
-
-    fun <ActionT : AsyncAction<StateT, ResultT>, StateT : State, ResultT> dispatch(action: ActionT, stateClazz: KClass<StateT>)
-
-    fun <StateT : State> currentState(clazz: KClass<StateT>): StateT?
-
-    fun shutdown()
-}
-
-class SynchronousStore : BlockingStore {
-
-    internal val states: MutableList<Container>
-
-    internal val subscriptions: MutableList<Store.Subscription<out State>>
+class SynchronousStore{
 
     private val syncQueue = DispatchQueue()
 
-    private val updateQueue = DispatchQueue()
+    private val store = Store()
 
-    private val notifyQueue = DispatchQueue()
+    internal val states: MutableList<Store.Container>
+        get() = store.states
+
+    internal val subscriptions: MutableList<Store.Subscription<out State>>
+        get() = store.subscriptions
 
     init {
-        states = arrayListOf()
-        subscriptions = arrayListOf()
-
         syncQueue.start()
-        updateQueue.start()
-        notifyQueue.start()
     }
 
     /**
@@ -63,24 +38,15 @@ class SynchronousStore : BlockingStore {
      *  }
      * ```
      */
-    override fun <StateT : State> subscribe(
+    fun <StateT : State> subscribe(
         subscriber: Subscriber,
         stateClazz: KClass<StateT>,
-        initialState: Boolean,
-        queue: DispatchQueue?,
+        initialState: Boolean = false,
+        queue: CoroutineDispatcher = Dispatchers.Default,
         handler: Handler<StateT>
-    ): SubscriptionID {
-        val subscription = Store.Subscription(obj = subscriber, handler = handler, key = stateClazz, queue = queue ?: notifyQueue)
-        syncQueue.sync {
-            subscriptions.add(subscription)
-        }
-        if (initialState) {
-            currentState(stateClazz)?.let {
-                notify(listOf(subscription), it)
-            }
-        }
-        return subscription.subscriptionID
-    }
+    ): SubscriptionID = syncQueue.sync {
+        store.subscribe(subscriber, stateClazz, initialState, queue, handler)
+    } ?: -1
 
     /**
      * Unsubscribe from state updates. The supplied SubscriptionID will be used to perform the
@@ -88,11 +54,9 @@ class SynchronousStore : BlockingStore {
      *
      * @param subscriptionID The subscriberID given as a result from a previous subscribe() call.
      */
-    override fun unsubscribe(subscriptionID: SubscriptionID) {
+    fun unsubscribe(subscriptionID: SubscriptionID) {
         syncQueue.sync {
-            subscriptions.removeAll {
-                it.subscriptionID == subscriptionID
-            }
+            store.unsubscribe(subscriptionID)
         }
     }
 
@@ -102,14 +66,9 @@ class SynchronousStore : BlockingStore {
      *
      * @param state A class instance conforming to `State`.
      */
-    override fun <StateT : State> provide(state: StateT) {
-        val exists = statesMatching(state::class)
-        if (exists.isNotEmpty()) {
-            return
-        }
-        val container = Container(state)
-        updateQueue.sync {
-            states.add(container)
+    fun <StateT : State> provide(state: StateT) {
+        syncQueue.sync {
+            store.provide(state)
         }
     }
 
@@ -120,22 +79,10 @@ class SynchronousStore : BlockingStore {
      * @param action        The action to be dispatched.  Must conform to `Action`.
      * @param stateClazz    The type of message this action acts upon. Must conform to `State`
      */
-    override fun <ActionT : Action<StateT>, StateT : State> dispatch(action: ActionT, stateClazz: KClass<StateT>) {
-        // check if we have the instance type requested.
-        val target = statesMatching(stateClazz).firstOrNull()
-        // type the current state to match.
-        var state = target?.state as? StateT ?: return
-
-        updateQueue.sync {
-            // perform data reduction.
-            state = action.reduce(state)
-            // state is final now, apply it back to storage.
-            target.state = state
+    fun <ActionT : Action<StateT>, StateT : State> dispatch(action: ActionT, stateClazz: KClass<StateT>) {
+        syncQueue.sync {
+            store.dispatch(action, stateClazz)
         }
-
-        // get any handlers that work against T.StateType
-        val subs = subscribersForState(stateClazz)
-        notify(subs, state)
     }
 
 
@@ -146,24 +93,9 @@ class SynchronousStore : BlockingStore {
      * @param action        The action to be dispatched.  Must conform to `AsyncAction`.
      * @param stateClazz    The type of message this action acts upon. Must conform to `State`
      */
-    override fun <ActionT : AsyncAction<StateT, ResultT>, StateT : State, ResultT> dispatch(action: ActionT, stateClazz: KClass<StateT>) {
-        // check if we have the instance type requested.
-        val target = statesMatching(stateClazz).firstOrNull()
-        // type the current state to match.
-        var state = target?.state as? StateT ?: return
-
-        // perform async operation.
-        action.operation(state) { result: ResultT? ->
-            updateQueue.sync {
-                // perform data reduction.
-                state = action.reduce(state, result)
-                // state is final now, apply it back to storage.
-                target.state = state
-            }
-
-            // get any handlers that work against T.StateType
-            val subs = subscribersForState(stateClazz)
-            notify(subs, state)
+    fun <ActionT : AsyncAction<StateT, ResultT>, StateT : State, ResultT> dispatch(action: ActionT, stateClazz: KClass<StateT>) {
+        syncQueue.sync {
+            store.dispatch(action, stateClazz)
         }
     }
 
@@ -175,12 +107,8 @@ class SynchronousStore : BlockingStore {
      *      val state = store.currentState(MessagesState::class)
      * ```
      */
-    override fun <StateT : State> currentState(clazz: KClass<StateT>): StateT? {
-        val matchingStates = statesMatching(clazz)
-        return if (matchingStates.isNotEmpty())
-            matchingStates[0].state as? StateT
-        else
-            null
+    fun <StateT : State> currentState(clazz: KClass<StateT>): StateT?  = syncQueue.sync {
+        store.currentState(clazz)
     }
 
     /**
@@ -188,61 +116,8 @@ class SynchronousStore : BlockingStore {
      * containerized environments. This is a non-reversible call; the Store will non-longer
      * process events after this call.
      */
-    override fun shutdown() {
+    fun shutdown() {
         syncQueue.stop()
-        updateQueue.stop()
-        notifyQueue.stop()
+        store.shutdown()
     }
-
-    /* Internal Functions */
-
-    // Retrieves all subscribers for a particular type of state
-    private fun <StateT : State> subscribersForState(stateClazz: KClass<StateT>): List<Store.Subscription<out State>> {
-        var result = listOf<Store.Subscription<out State>>()
-        syncQueue.sync {
-            result = subscriptions.filter {
-                it.key == stateClazz
-            }
-        }
-
-        return result
-    }
-
-    // Returns any state instances matching T::class.
-    private fun <T : State> statesMatching(clazz: KClass<T>): List<Container> {
-        var result = listOf<Container>()
-        updateQueue.sync {
-            result = states.filter {
-                it.state::class == clazz
-            }
-        }
-
-        return result
-    }
-
-    // Notify any subscribers with the new state.
-    private fun <StateT : State> notify(subscribers: List<Store.Subscription<out StateT>>, state: StateT) {
-        for (sub in subscribers) {
-            val handler = sub.handler as? Handler<StateT> ?: continue
-            // call said handlers to inform them of the new state.
-            if (sub.owner.get() != null) {
-                // call the handlers asynchronously
-                sub.queue.sync {
-                    handler(state)
-                }
-            }
-        }
-        clean()
-    }
-
-    // Removes any expired subscribers.
-    private fun clean() {
-        syncQueue.sync {
-            subscriptions.removeAll {
-                it.owner.get() == null
-            }
-        }
-    }
-
-    data class Container(var state: State)
 }
