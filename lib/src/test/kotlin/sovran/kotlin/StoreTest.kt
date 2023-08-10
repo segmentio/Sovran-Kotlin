@@ -3,6 +3,7 @@
  */
 package sovran.kotlin
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
@@ -26,10 +27,10 @@ class StoreTest : Subscriber {
     @Test
     fun testProvide() = runBlocking {
         store.provide(MessagesState())
-        assertEquals(1, store.internalStore.states.size)
+        assertEquals(1, store.states.size)
 
         store.provide(UserState())
-        assertEquals(2, store.internalStore.states.size)
+        assertEquals(2, store.states.size)
     }
 
     @Test
@@ -54,7 +55,7 @@ class StoreTest : Subscriber {
         }
 
         // we should have 3 subscriptions.  2 for UserState, one for MessagesState.
-        assertEquals(3, store.internalStore.subscriptions.size)
+        assertEquals(3, store.subscriptions.size)
         // we should have id1 + 2 = id3,
         // since the subscription ID has been increased twice since id1
         assertEquals(id1 + 2, id3)
@@ -70,7 +71,7 @@ class StoreTest : Subscriber {
         // in use, this will assert in DEBUG mode, outside of tests.
         store.provide(UserState())
 
-        assertEquals(2, store.internalStore.states.size)
+        assertEquals(2, store.states.size)
     }
 
     @Test
@@ -188,13 +189,13 @@ class StoreTest : Subscriber {
         val action = MessagesUnreadAction(22)
         store.dispatch(action, MessagesState::class)
 
-        val subscriptionCount = store.internalStore.subscriptions.size
+        val subscriptionCount = store.subscriptions.size
         store.unsubscribe(identifier)
 
         // now the subscriptions should not have the one being unsubscribed
-        assertFalse(store.internalStore.subscriptions.any{ it.subscriptionID == identifier })
+        assertFalse(store.subscriptions.any{ it.subscriptionID == identifier })
         // and the size should reduced only by 1
-        assertEquals(subscriptionCount - 1, store.internalStore.subscriptions.size)
+        assertEquals(subscriptionCount - 1, store.subscriptions.size)
 
         // this should be ignored since we've unsubscribed.
         val nextAction = MessagesUnreadAction(11)
@@ -256,10 +257,9 @@ class StoreTest : Subscriber {
         val handler: Handler<MessagesState> = { _ ->
             print("booya")
         }
-        val queue = DispatchQueue()
-        val s1 = Store.Subscription(this, handler, MessagesState::class, queue)
-        val s2 = Store.Subscription(this, handler, MessagesState::class, queue)
-        val s3 = Store.Subscription(this, handler, MessagesState::class, queue)
+        val s1 = Store.Subscription(this, handler, MessagesState::class, Dispatchers.Default)
+        val s2 = Store.Subscription(this, handler, MessagesState::class, Dispatchers.Default)
+        val s3 = Store.Subscription(this, handler, MessagesState::class, Dispatchers.Default)
 
         assertTrue(s2.subscriptionID > s1.subscriptionID)
         assertTrue(s3.subscriptionID > s2.subscriptionID)

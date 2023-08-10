@@ -1,44 +1,56 @@
 package sovran.kotlin
 
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
-import java.util.concurrent.Semaphore
-import java.util.concurrent.SynchronousQueue
-import java.util.concurrent.atomic.AtomicBoolean
 
 class DispatchQueue {
 
-    private val queue = SynchronousQueue<Task>()
+    private val channel = Channel<Task>(UNLIMITED)
 
-    private val executor = Executors.newSingleThreadExecutor()
+    private val dispatcher: CloseableCoroutineDispatcher =
+        Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
-    private val running = AtomicBoolean(true)
+    private val scope = CoroutineScope(SupervisorJob())
 
     fun start() {
-        executor.execute(::consume)
+        consume()
     }
 
     fun stop() {
-        running.set(false)
-        executor.shutdown()
+        channel.cancel()
+        dispatcher.close()
     }
 
-    private fun consume() {
-        while (running.get()) {
-            val task = queue.take()
-            task.closure()
-            task.latch.countDown()
+    private fun consume() = scope.launch(dispatcher) {
+        for (task in channel) {
+            if (task is SyncTask<*>) {
+                task.run()
+            }
         }
     }
 
-    fun sync(closure: () -> Unit) {
-        val task = Task(closure)
-        queue.put(task)
+    fun <T> sync(closure: suspend () -> T) : T? {
+        val task = SyncTask(closure)
+        channel.trySend(task)
         task.latch.await()
+        return task.result
     }
 
-    data class Task(
-        val closure: () -> Unit,
+    abstract class Task {
         val latch: CountDownLatch = CountDownLatch(1)
-    )
+    }
+
+    class SyncTask<T>(
+        val closure: suspend () -> T?
+    ) : Task() {
+        var result: T? = null
+
+        suspend fun run() {
+            result = closure()
+            latch.countDown()
+        }
+    }
 }

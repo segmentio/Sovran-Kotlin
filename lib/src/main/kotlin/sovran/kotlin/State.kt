@@ -22,4 +22,4 @@ interface State { }
  * ```
  * In the example above, `T` represents `MyState`.
  */
-typealias Handler<StateT> = (StateT) -> Unit
+typealias Handler<StateT> = suspend (StateT) -> Unit
